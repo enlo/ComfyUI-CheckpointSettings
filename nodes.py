@@ -1,6 +1,7 @@
 
 import os
 import random
+import re
 import datetime
 import folder_paths
 import comfy.utils, comfy.sample, comfy.samplers, comfy.controlnet, comfy.model_base, comfy.model_management, comfy.sampler_helpers, comfy.supported_models
@@ -197,7 +198,8 @@ class CheckPointSettingsToFilename:
         fmtParam['datetime'] = currenttime
         fmtParam['date'] = currenttime.date()
         fmtParam['time'] = currenttime.time()
-        return (format.format(**fmtParam),)
+        result = re.sub(r'[\\|/|:|?|.|"|<|>|\|]', '-', format.format(**fmtParam))
+        return (result,)
         
 
 
