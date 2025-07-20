@@ -30,6 +30,7 @@ class CheckPointSettingsPack:
                 "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0}),
                 "sampler_name": (comfy.samplers.KSampler.SAMPLERS,),
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
+                "denoise": ("FLOAT",{"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
             },
             "optional": {
                 "optional_lora_stack": ("LORA_STACK",)
@@ -42,8 +43,12 @@ class CheckPointSettingsPack:
     CATEGORY = "CheckPointSettings"
     
     def packSettings(self, ckpt_name, vae_name, clip_skip
-                     , steps, cfg, sampler_name, scheduler
+                     , steps, cfg, sampler_name, scheduler, denoise
                      , optional_lora_stack=None):
+        
+        if ckpt_name == 'None':
+            return (None,)
+        
         checkpoint_settings =  {
             "optional_lora_stack": optional_lora_stack,
             "ckpt_name": ckpt_name,
@@ -53,6 +58,7 @@ class CheckPointSettingsPack:
             "cfg": cfg,
             "sampler_name": sampler_name,
             "scheduler": scheduler,
+            "denoise": denoise,
         }
         return (checkpoint_settings,)
 
@@ -84,7 +90,8 @@ class CheckPointSettingsTie:
             if k == "base_settings_list" and v is not None:
                 output_list.extend(v)
             if k.startswith("settings") and v is not None:
-                output_list.append(v)
+                if v['ckpt_name'] != 'None':
+                    output_list.append(v)
         
         return (output_list, len(output_list),)
 
@@ -117,8 +124,9 @@ class CheckPointSettingsListMerger:
         
         return (output_list, len(output_list),)
 
-    
-    
+###
+### 設定リストからランダムに1つを選択する.
+###
 class CheckPointSettingsRandomSelector:
     @classmethod
     def INPUT_TYPES(cls):
@@ -141,7 +149,10 @@ class CheckPointSettingsRandomSelector:
         index = int(instance.randrange(len(settings_list)))
         value = settings_list[index]
         return (value, index,)
-
+    
+###
+### まとめた情報を取り出す
+###    
 class CheckPointSettingsUnpack:
     @classmethod
     def INPUT_TYPES(cls):
@@ -153,11 +164,11 @@ class CheckPointSettingsUnpack:
         
     RETURN_TYPES = ("CP_SETTINGS", "LORA_STACK"
                     , AlwaysEqualProxy("*"), AlwaysEqualProxy("*"), "INT"
-                    , "INT", "FLOAT", AlwaysEqualProxy("*"), AlwaysEqualProxy("*")
+                    , "INT", "FLOAT", AlwaysEqualProxy("*"), AlwaysEqualProxy("*"), "FLOAT"
                     , )
     RETURN_NAMES = ("settings", "optional_lora_stack"
                     , "ckpt_name", "vae_name", "clip_skip"
-                    , "steps", "cfg", "sampler_name", "scheduler"
+                    , "steps", "cfg", "sampler_name", "scheduler", "denoise"
                     ,)
     FUNCTION = "unpackSettings"
     CATEGORY = "CheckPointSettings"
@@ -165,7 +176,7 @@ class CheckPointSettingsUnpack:
     def unpackSettings(self, settings):
         return (settings, settings["optional_lora_stack"]
                 , settings["ckpt_name"], settings["vae_name"], settings["clip_skip"]
-                , settings["steps"], settings["cfg"], settings["sampler_name"], settings["scheduler"],)
+                , settings["steps"], settings["cfg"], settings["sampler_name"], settings["scheduler"],settings["denoise"])
 
 ###
 ### 設定情報からファイル名を作成
@@ -201,6 +212,34 @@ class CheckPointSettingsToFilename:
         result = re.sub(r'[\\|/|:|?|.|"|<|>|\|]', '-', format.format(**fmtParam))
         return (result,)
         
+###
+### 設定された値からランダムで数値を選択する. LORAの効きを調整する等の用途で利用
+###
+class RandomChoiceNumber:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "float_list": ("STRING", {"default": "0.0|0.125|0.25" }),
+                "seed": ("INT",)
+            },
+            "optional": {
+            }
+        }
+    
+    RETURN_TYPES = ("FLOAT","INT","INT",)
+    RETURN_NAMES = ("selected_value","rounded_int", "index",)
+    FUNCTION = "index_switch"
+    CATEGORY = "CheckPointSettings/Utility"
+            
+    def index_switch(self, float_list, seed):
+        splited = float_list.split("|")
+        instance = random.SystemRandom(seed)
+        index = int(instance.randrange(len(splited)))
+        value = splited[index]
+        fval = float(value)
+        ival = int(round(fval))
+        return (fval, ival, index,)    
 
 
 NODE_CLASS_MAPPINGS = {
@@ -210,6 +249,7 @@ NODE_CLASS_MAPPINGS = {
     "CheckPointSettingsListMerger": CheckPointSettingsListMerger,
     "CheckPointSettingsRandomSelector": CheckPointSettingsRandomSelector,
     "CheckPointSettingsToFilename": CheckPointSettingsToFilename,
+    "RandomChoiceNumber": RandomChoiceNumber,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -219,4 +259,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "CheckPointSettingsListMerger": "CheckPointSettingsListMerger",
     "CheckPointSettingsRandomSelector": "CheckPointSettingsRandomSelector",
     "CheckPointSettingsToFilename": "CheckPointSettingsToFilename",
+    "RandomChoiceNumber": "RandomChoiceNumber",
 }
